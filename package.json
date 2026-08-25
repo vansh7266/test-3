@@ -1,0 +1,22 @@
+{
+  "name": "test-3",
+  "version": "1.0.0",
+  "description": "Minimal throwaway service to production-test Obyn Part 2 monitoring pipeline",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test/test.js"
+  },
+  "keywords": [
+    "obyn",
+    "monitoring",
+    "heartbeat",
+    "test-service"
+  ],
+  "author": "vansh7266",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

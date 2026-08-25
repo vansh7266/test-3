@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test-3 • Obyn Monitoring Test Service</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge-tag">Throwaway Test Service</div>
+      <h1 id="title">Test-3 is up</h1>
+      <p class="subtitle">Production test harness for Obyn Part 2 Monitoring Pipeline</p>
+    </header>
+
+    <!-- Main Status Card -->
+    <section class="card status-card">
+      <div class="status-indicator-wrap">
+        <div id="statusPulse" class="status-pulse up"></div>
+        <div class="status-info">
+          <div class="label">Heartbeat Status</div>
+          <div id="statusText" class="status-value up">UP</div>
+        </div>
+      </div>
+      <div class="status-meta">
+        <div>
+          <span class="meta-label">Next Scheduled:</span>
+          <span id="nextHeartbeat" class="meta-value">—</span>
+        </div>
+        <div>
+          <span class="meta-label">Sent Count:</span>
+          <span id="heartbeatCount" class="meta-value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Incident Simulator / Manual Switch -->
+    <section class="card switch-card">
+      <h2>🎛️ Manual Incident Switch</h2>
+      <p class="card-desc">Force the next heartbeat status on demand to test Obyn Part 2 detection & incident recovery:</p>
+      
+      <div class="button-group">
+        <button id="btnUp" class="btn btn-up" onclick="setStatus('up')">
+          <span class="btn-icon">🟢</span> Force UP
+        </button>
+        <button id="btnDegraded" class="btn btn-degraded" onclick="setStatus('degraded')">
+          <span class="btn-icon">🟡</span> Force DEGRADED
+        </button>
+        <button id="btnDown" class="btn btn-down" onclick="setStatus('down')">
+          <span class="btn-icon">🔴</span> Force DOWN
+        </button>
+      </div>
+
+      <div class="action-bar">
+        <button id="btnTrigger" class="btn btn-secondary" onclick="triggerHeartbeat()">
+          ⚡ Send Heartbeat Now
+        </button>
+        <span id="switchFeedback" class="feedback-msg"></span>
+      </div>
+    </section>
+
+    <!-- Configuration Summary -->
+    <section class="card config-card">
+      <h2>⚙️ Obyn Configuration</h2>
+      <div class="config-grid">
+        <div class="config-item">
+          <span class="config-key">Service ID:</span>
+          <span id="cfgServiceId" class="config-val">Test-3</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">Obyn Host:</span>
+          <span id="cfgHost" class="config-val font-mono">—</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">Workspace ID:</span>
+          <span id="cfgWorkspace" class="config-val font-mono">—</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">Project ID:</span>
+          <span id="cfgProject" class="config-val font-mono">—</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">Interval:</span>
+          <span id="cfgInterval" class="config-val font-mono">60s</span>
+        </div>
+        <div class="config-item">
+          <span class="config-key">API Token:</span>
+          <span id="cfgToken" class="config-val">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Heartbeat History -->
+    <section class="card logs-card">
+      <div class="logs-header">
+        <h2>📡 Recent Heartbeats</h2>
+        <span class="auto-refresh-pill">Live Polling (3s)</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Time (Observed)</th>
+              <th>Status</th>
+              <th>Trigger</th>
+              <th>Latency</th>
+              <th>Obyn HTTP Code</th>
+              <th>Event ID</th>
+            </tr>
+          </thead>
+          <tbody id="logsTableBody">
+            <tr>
+              <td colspan="6" class="text-muted text-center">Waiting for first heartbeat...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        renderUI(data);
+      } catch (err) {
+        console.error('Failed to fetch status:', err);
+      }
+    }
+
+    function renderUI(data) {
+      const status = data.currentStatus || 'up';
+      const statusText = document.getElementById('statusText');
+      const statusPulse = document.getElementById('statusPulse');
+      const title = document.getElementById('title');
+
+      title.textContent = `Test-3 is ${status.toUpperCase()}`;
+      statusText.textContent = status.toUpperCase();
+      statusText.className = `status-value ${status}`;
+      statusPulse.className = `status-pulse ${status}`;
+
+      // Update buttons active state
+      document.getElementById('btnUp').classList.toggle('active', status === 'up');
+      document.getElementById('btnDegraded').classList.toggle('active', status === 'degraded');
+      document.getElementById('btnDown').classList.toggle('active', status === 'down');
+
+      // Heartbeat stats
+      document.getElementById('heartbeatCount').textContent = data.heartbeat.count;
+      if (data.heartbeat.nextExpectedAt) {
+        const nextTime = new Date(data.heartbeat.nextExpectedAt);
+        document.getElementById('nextHeartbeat').textContent = nextTime.toLocaleTimeString();
+      }
+
+      // Config
+      document.getElementById('cfgServiceId').textContent = data.config.serviceId;
+      document.getElementById('cfgHost').textContent = data.config.obynHost;
+      document.getElementById('cfgWorkspace').textContent = data.config.workspaceId;
+      document.getElementById('cfgProject').textContent = data.config.projectId;
+      document.getElementById('cfgInterval').textContent = `${data.config.intervalSeconds}s`;
+      document.getElementById('cfgToken').innerHTML = data.config.apiTokenConfigured
+        ? '<span class="badge-ok">Configured</span>'
+        : '<span class="badge-warn">Missing</span>';
+
+      // Logs table
+      const tbody = document.getElementById('logsTableBody');
+      if (data.recentLogs && data.recentLogs.length > 0) {
+        tbody.innerHTML = data.recentLogs.map(log => {
+          const timeStr = new Date(log.timestamp).toLocaleTimeString();
+          const badgeClass = log.status === 'up' ? 'badge-ok' : (log.status === 'degraded' ? 'badge-warn' : 'badge-danger');
+          const httpBadge = log.httpStatus === 200 || log.httpStatus === 201 || log.httpStatus === 204
+            ? `<span class="badge-ok">${log.httpStatus}</span>`
+            : (log.httpStatus ? `<span class="badge-danger">${log.httpStatus}</span>` : `<span class="badge-muted">${log.error ? 'Error' : 'Pending'}</span>`);
+          
+          return `
+            <tr>
+              <td class="font-mono">${timeStr}</td>
+              <td><span class="${badgeClass}">${log.status.toUpperCase()}</span></td>
+              <td><span class="trigger-pill">${log.triggerType}</span></td>
+              <td class="font-mono">${log.latencyMilliseconds}ms</td>
+              <td>${httpBadge}</td>
+              <td class="font-mono text-muted truncate" title="${log.id}">${log.id.slice(0, 8)}...</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    async function setStatus(newStatus) {
+      const feedback = document.getElementById('switchFeedback');
+      feedback.textContent = 'Updating...';
+      try {
+        const res = await fetch('/api/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        const data = await res.json();
+        feedback.textContent = `Status set to ${newStatus.toUpperCase()}`;
+        setTimeout(() => feedback.textContent = '', 3000);
+        fetchStatus();
+      } catch (err) {
+        feedback.textContent = 'Failed to update status';
+      }
+    }
+
+    async function triggerHeartbeat() {
+      const btn = document.getElementById('btnTrigger');
+      const feedback = document.getElementById('switchFeedback');
+      btn.disabled = true;
+      feedback.textContent = 'Sending heartbeat...';
+      try {
+        const res = await fetch('/api/heartbeat/trigger', { method: 'POST' });
+        const data = await res.json();
+        feedback.textContent = data.success ? '✅ Heartbeat sent!' : `⚠️ Dispatch finished (${data.reason || 'logged'})`;
+        setTimeout(() => feedback.textContent = '', 3000);
+        fetchStatus();
+      } catch (err) {
+        feedback.textContent = 'Failed to send heartbeat';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Auto-refresh UI every 3 seconds
+    fetchStatus();
+    setInterval(fetchStatus, 3000);
+  </script>
+</body>
+</html>
